@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Learning Oracle — A Magic 8-Ball You Can Teach</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --ink: #1c1e21; --muted: #5b6270;
+    --line: #e5e7eb; --accent: #2563eb; --on-accent: #ffffff;
+    --ok: #15803d; --on-ok: #ffffff; --okbg: #dcfce7;
+    --bad: #dc2626; --badbg: #fee2e2; --warn: #b45309; --focus: #2563eb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115; --card: #181b22; --ink: #e7e9ee; --muted: #a3a9b5;
+      --line: #2c313b; --accent: #7cb4ff; --on-accent: #0f1115;
+      --ok: #5ddc8a; --on-ok: #04230f; --okbg: #15402a;
+      --bad: #ff8a80; --badbg: #4a1d1d; --warn: #f5b84a; --focus: #a7cbff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px 72px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; line-height: 1.45; }
+  .sub a { color: var(--accent); }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-top: 16px; }
+  .card h2 { font-size: 1rem; margin: 0 0 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .card h3 { font-size: .95rem; margin: 18px 0 8px; }
+  .note { font-size: .85rem; color: var(--muted); line-height: 1.45; margin: 6px 0; }
+  .note b.oov { color: var(--bad); }
+  .status { font-size: 1.05rem; margin: 6px 0 12px; min-height: 1.4em; }
+  .status.untrained { color: var(--warn); font-weight: 600; }
+  .status.done { color: var(--ok); font-weight: 600; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
+  @media (max-width: 600px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  .stat { background: var(--bg); border-radius: 8px; padding: 10px; }
+  .stat .k { font-size: .75rem; color: var(--muted); text-transform: uppercase; }
+  .stat .v { font-size: 1.3rem; font-variant-numeric: tabular-nums; }
+  button { font: inherit; padding: 10px 18px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; margin: 0 8px 8px 0; }
+  button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  progress { width: 100%; height: 10px; margin-top: 4px; }
+  details { margin-top: 16px; }
+  summary { cursor: pointer; color: var(--muted); }
+  code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--bg); padding: 10px 12px; border-radius: 8px; font-size: .85rem; overflow-x: auto; line-height: 1.5; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 700px) { .two { grid-template-columns: 1fr; } }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin: 0 8px 8px 0; }
+  .seg button { margin: 0; border: 0; border-radius: 0; padding: 8px 12px; font-size: .9rem; }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--card); }
+  .seg button:focus-visible { outline-offset: -3px; }
+  .pickbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+  /* previous / next links through the demo series */
+  .series { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: .9rem; color: var(--muted); margin: 0 0 14px; }
+  .series a { color: var(--accent); text-decoration: none; font-weight: 600; white-space: nowrap; }
+  .series a:hover, .series a:focus-visible { text-decoration: underline; }
+  .series.bottom { margin: 28px 0 0; padding-top: 14px; border-top: 1px solid var(--line); }
+  /* the ball: the one dark object on the page, same in both color schemes */
+  .ballwrap { display: flex; justify-content: center; margin: 10px 0 16px; }
+  .ball { width: min(260px, 70vw); aspect-ratio: 1; border-radius: 50%; position: relative;
+    background: radial-gradient(circle at 32% 28%, #4a4458 0%, #1a1722 32%, #07060a 75%);
+    box-shadow: 0 20px 40px rgba(0,0,0,.35), inset 0 -20px 40px rgba(0,0,0,.6), 0 0 0 1px #000; }
+  .ball .win { position: absolute; left: 50%; top: 50%; width: 62%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%;
+    background: radial-gradient(circle at 50% 40%, #2a3fb8, #0e1a5e 60%, #060c33); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 30px #000; }
+  .ball .tri { width: 76%; aspect-ratio: 1; clip-path: polygon(50% 8%, 96% 88%, 4% 88%); background: linear-gradient(180deg, #2d44c7, #101c6e); display: flex; align-items: center; justify-content: center; padding: 28% 14% 6%; }
+  .ball .ans { font-size: clamp(10px, 2.4vw, 13px); font-weight: 700; line-height: 1.25; text-align: center; color: #eef2ff; text-transform: uppercase; letter-spacing: .04em; transition: opacity .25s; max-width: 100%; overflow-wrap: anywhere; }
+  .ball.shaking { animation: shake .7s ease-in-out; }
+  .ball.shaking .ans { opacity: 0; }
+  @keyframes shake { 0%, 100% { transform: rotate(0); } 15% { transform: rotate(-9deg) translateX(-6px); } 30% { transform: rotate(8deg) translateX(6px); } 45% { transform: rotate(-6deg); } 60% { transform: rotate(5deg); } 80% { transform: rotate(-2deg); } }
+  @media (prefers-reduced-motion: reduce) { .ball.shaking { animation: none; } }
+  .askrow { display: flex; gap: 8px; flex-wrap: wrap; }
+  .askrow input { flex: 1 1 200px; min-width: 0; font: inherit; background: var(--card); border: 1px solid var(--line); border-radius: 8px; color: var(--ink); padding: 10px 12px; }
+  .askrow button { margin: 0; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .chip { margin: 0; padding: 4px 12px; border-radius: 999px; border: 1px dashed var(--line); color: var(--muted); background: none; font-size: .85rem; }
+  .chip:hover { border-color: var(--accent); color: var(--ink); }
+  .fb { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  .fb .thumb { margin: 0; font-size: 22px; border-radius: 999px; width: 52px; height: 52px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+  .fb .thumb.up:hover { border-color: var(--ok); } .fb .thumb.down:hover { border-color: var(--bad); }
+  .fbmsg { font-size: .85rem; color: var(--muted); min-height: 1.4em; font-variant-numeric: tabular-nums; }
+  .fbmsg.good { color: var(--ok); font-weight: 600; } .fbmsg.bad { color: var(--bad); font-weight: 600; }
+  canvas#curve { width: 100%; height: 150px; display: block; background: var(--bg); border-radius: 8px; }
+  .steps { display: flex; flex-direction: column; gap: 10px; }
+  .step { display: grid; grid-template-columns: 24px 1fr; gap: 8px; align-items: start; }
+  .step .n { font-size: .75rem; color: var(--muted); padding-top: 3px; font-variant-numeric: tabular-nums; }
+  .cands { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .cand { display: grid; grid-template-columns: 84px 1fr 44px; gap: 8px; align-items: center; font-size: .8rem; }
+  .cand .w { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, Menlo, monospace; }
+  .cand.chosen .w { color: var(--ink); font-weight: 700; }
+  .bar { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--muted); opacity: .6; }
+  .cand.chosen .bar i { background: var(--accent); opacity: 1; }
+  .cand .p { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tally { display: flex; flex-direction: column; gap: 6px; }
+  .tally .row { display: grid; grid-template-columns: 1fr 48px; gap: 8px; align-items: center; font-size: .9rem; }
+  .tally .row .bar { height: 12px; margin-top: 3px; } .tally .row .bar i { background: var(--ok); opacity: 1; }
+  .tally .row span { font-size: .8rem; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+  .empty { color: var(--muted); font-style: italic; font-size: .9rem; }
+  /* curation */
+  .pool { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; margin-top: 12px; }
+  .pair { border: 2px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; background: var(--card); }
+  .pair.yes { border-color: var(--ok); background: var(--okbg); } .pair.no { border-color: var(--bad); background: var(--badbg); opacity: .8; }
+  .pair .q { color: var(--muted); font-size: .85rem; } .pair .q::before { content: "Q  "; font-size: .7rem; color: var(--accent); font-weight: 700; }
+  .pair .a { font-size: .95rem; margin-top: 2px; } .pair .a::before { content: "A  "; font-size: .7rem; color: var(--accent); font-weight: 700; }
+  .pair .acts { display: flex; flex-direction: column; gap: 4px; }
+  .pair .acts button { margin: 0; width: 38px; height: 34px; padding: 0; border-radius: 6px; font-size: 16px; }
+  .pair.yes .acts .y { background: var(--ok); color: var(--on-ok); border-color: var(--ok); }
+  .pair.no .acts .n { background: var(--bad); color: #fff; border-color: var(--bad); }
+  .toolbar { display: flex; gap: 0 4px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+  .toolbar .count { font-size: .85rem; color: var(--muted); margin-left: auto; font-variant-numeric: tabular-nums; }
+  textarea { width: 100%; min-height: 120px; font: inherit; font-family: ui-monospace, Menlo, monospace; font-size: .85rem; line-height: 1.6; background: var(--card); border: 1px solid var(--line); border-radius: 8px; color: var(--ink); padding: 10px 12px; resize: vertical; }
+  label.lbl { display: block; font-weight: 600; margin: 14px 0 6px; }
+  .err { font-family: ui-monospace, Menlo, monospace; font-size: .8rem; color: var(--bad); white-space: pre-wrap; margin-top: 6px; }
+  .ok { font-size: .85rem; color: var(--ok); margin-top: 6px; font-weight: 600; }
+  .prose p { margin: 0 0 12px; line-height: 1.5; }
+  /* QR code for presentations (lower left) */
+  #qrBtn { position: fixed; left: 16px; bottom: 16px; z-index: 20; margin: 0; font-size: .85rem; padding: 8px 14px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  #qrPanel { position: fixed; left: 16px; bottom: 64px; z-index: 20; display: none; flex-direction: column; align-items: center; gap: 8px; padding: 16px 20px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+  #qrPanel.open { display: flex; }
+  #qrPanel .qrTitle { font-size: 1rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  #qrPanel svg { width: 220px; height: 220px; border: 8px solid #fff; background: #fff; display: block; }
+  #qrPanel .qrUrl { font-size: .85rem; color: var(--muted); letter-spacing: .03em; }
+  @media (max-width: 700px) { #qrPanel svg { width: 160px; height: 160px; } }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav class="series" aria-label="Neural network demo series"><a href="https://professor-jeff.github.io/happy-face-nn/" title="Previous demo in the series">← Previous: Happy Face</a><span>Part 4 of 4 · neural network demos</span><span></span></nav>
+  <h1>The Learning Oracle: a magic 8-ball you can teach</h1>
+  <p class="sub">Twenty-five words, one tiny network (75 inputs → 24 hidden neurons → 26 outputs), and your thumbs.
+    The first three demos learned from examples you handed them. This one <b>talks back</b>, one word at a time, and learns from how you rate what it says:
+    the idea behind training a chatbot on human feedback, shrunk to a word list.</p>
+
+  <!-- ============================ STEP 1 ============================ -->
+  <div class="card" id="oracle">
+    <h2>1 · Ask</h2>
+    <div class="pickbar">
+      <span style="font-weight:600">Mode:</span>
+      <div class="seg" id="modeSeg" role="group" aria-label="Which oracle answers">
+        <button type="button" data-mode="classic" aria-pressed="true" title="Twenty stock answers, one picked at random. No model.">Classic 8-Ball</button>
+        <button type="button" data-mode="learn" aria-pressed="false" title="A real neural network, trained in your browser when the page loaded. It can be taught.">Learning Oracle</button>
+      </div>
+      <span class="note" id="modeNote" style="margin:0"></span>
+    </div>
+    <div class="two">
+      <div>
+        <div class="ballwrap"><div class="ball" id="ball" aria-hidden="true"><div class="win"><div class="tri"><div class="ans" id="ans">Ask me<br>anything</div></div></div></div></div>
+        <div class="sr" id="ansLive" role="status" aria-live="polite"></div>
+        <form class="askrow" id="askForm">
+          <label class="sr" for="qin">Your question</label>
+          <input id="qin" placeholder="Will my luck be bright?" autocomplete="off">
+          <button class="primary" type="submit" id="askBtn">Shake</button>
+          <button type="button" id="ask10" hidden title="Ask the same question ten times and tally the answers.">Ask 10×</button>
+        </form>
+        <div class="chips" id="chips" aria-label="Example questions"></div>
+        <div class="note" id="qnote"></div>
+        <div class="fb" id="fb" hidden>
+          <button class="thumb up" id="thumbUp" aria-label="Good answer: make those words more likely">👍</button>
+          <button class="thumb down" id="thumbDown" aria-label="Bad answer: make those words less likely">👎</button>
+          <div class="fbmsg" id="fbmsg" role="status">Rate the answer and the Oracle adjusts its weights.</div>
+        </div>
+        <div class="note" id="classicNote">Classic mode is pure chance: one of the twenty stock answers, picked at random. Nothing about your question reaches the answer, and rating it would change nothing, so there are no thumbs here. Switch to <b>Learning Oracle</b>.</div>
+      </div>
+      <div id="brain" hidden>
+        <h3 style="margin-top:0">The Oracle's state</h3>
+        <div class="stats">
+          <div class="stat" title="The Oracle's whole world: every question and answer is built from these words."><div class="k">Words</div><div class="v" id="sVocab">25</div></div>
+          <div class="stat" title="Every adjustable number in the network. Training and thumbs change these and nothing else."><div class="k">Weights</div><div class="v" id="sParams">0</div></div>
+          <div class="stat" title="One epoch = one pass through every approved question/answer pair."><div class="k">Epochs</div><div class="v" id="sEpochs">0</div></div>
+          <div class="stat" title="How many times you have rated an answer. Each rating runs six extra training steps."><div class="k">Thumbs given</div><div class="v" id="sFb">0</div></div>
+        </div>
+        <div id="trainNote" class="status" role="status">Training on the starter corpus…</div>
+        <progress id="prog" value="0" max="200" aria-label="Training progress"></progress>
+        <canvas id="curve" width="800" height="300" role="img" aria-label="Training loss per epoch: how surprised the network is by its own training data."></canvas>
+
+        <h3>What it was thinking</h3>
+        <p class="note" style="margin-top:0">Each row is one word choice. Bars are the probability the network gave each candidate; the highlighted one is what it picked.</p>
+        <div class="steps" id="steps"><div class="empty">Ask a question to see the choices.</div></div>
+
+        <h3>Ask 10×: how the answers are spread</h3>
+        <p class="note" style="margin-top:0">Same question, ten shakes. Give a thumbs up or down, then ask 10× again and watch the spread move.</p>
+        <div class="tally" id="tally"><div class="empty">Press “Ask 10×”.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ STEP 2 ============================ -->
+  <div class="card" id="curate">
+    <h2>2 · Curate the training data</h2>
+    <p class="note" style="margin-top:0">This is the Oracle's training data. Some of these pairs make sense, some are word salad. Mark the ones that feel like a good answer to the question, the same way you picked the happy faces, then retrain. The Oracle learns only from what you approved.</p>
+    <div class="toolbar">
+      <button class="primary" id="retrain" title="Throw away the current weights and train from scratch on the approved pairs only.">Retrain on approved</button>
+      <button id="moreRandom" title="Add twelve more word-salad decoys to the pool.">Add 12 random pairs</button>
+      <button id="approveStarter" title="Approve every pair that came from the starter corpus.">Approve starter set</button>
+      <button id="clearMarks">Clear marks</button>
+      <span class="count" id="poolCount" role="status"></span>
+    </div>
+    <div class="pool" id="pool"></div>
+  </div>
+
+  <!-- ============================ STEP 3 ============================ -->
+  <div class="card" id="vocab">
+    <h2>3 · Vocabulary and corpus</h2>
+    <p class="note" style="margin-top:0">The Oracle's entire world is this word list. Change it, and every question and answer has to be built from the new words. Corpus lines are <code>question =&gt; answer</code>; any line with a word that is not in the vocabulary is dropped.</p>
+    <label class="lbl" for="vocabIn">Vocabulary (<span id="vcount">25</span> words)</label>
+    <textarea id="vocabIn" style="min-height:70px"></textarea>
+    <label class="lbl" for="corpusIn">Starter corpus</label>
+    <textarea id="corpusIn" style="min-height:240px"></textarea>
+    <div class="err" id="corpusErr" role="status"></div>
+    <div class="ok" id="corpusOk" role="status"></div>
+    <div class="toolbar">
+      <button class="primary" id="applyVocab">Apply &amp; retrain</button>
+      <button id="restoreDefaults">Restore defaults</button>
+    </div>
+  </div>
+
+  <!-- ============================ HOW ============================ -->
+  <div class="card" id="how">
+    <h2>How it works</h2>
+    <div class="prose">
+      <p><b>Classic mode.</b> Twenty fixed answers, one picked by <code>Math.random()</code>. Nothing about your question reaches the answer. Nothing you do can change it.</p>
+      <p><b>Learning mode.</b> The Oracle is a real neural network, trained in your browser the moment the page loads. It never sees whole sentences; it only ever answers one question: <i>given the question, and the last two words I said, what word comes next?</i> It says a word, feeds it back in, and repeats until it picks <code>[end]</code>.</p>
+      <pre id="arch"></pre>
+      <p>Training means showing it the approved question/answer pairs over and over and nudging every weight a little in the direction that makes the right next word more likely. Each pass over the data is an epoch; the loss curve shows how surprised it is by its own training data.</p>
+      <p><b>Thumbs.</b> A thumbs up takes the exact answer it just gave and runs six extra training steps on it, so those words become more likely for that question. A thumbs down runs six steps the other way, pushing each chosen word's probability down. That is the whole idea behind training chatbots on human feedback, shrunk to twenty-five words.</p>
+      <p><b>Why answers wander.</b> The Oracle samples from its probabilities instead of always taking the top word, so the same question can get different answers. “Ask 10×” shows that spread. Feedback does not flip a switch; it tilts the odds.</p>
+    </div>
+    <details>
+      <summary>The math, in one screen</summary>
+      <pre>// forward: question words + last two words said → 24 hidden neurons → 26 probabilities
+h[j] = tanh( b1[j] + Σ_i x[i] · W1[i][j] )
+z[k] = b2[k] + Σ_j h[j] · W2[j][k]           p = softmax(z)       // one probability per word, plus [end]
+
+// training: cross-entropy on the next word, the same "predicted minus correct" line as the other demos
+dz[k] = p[k] − (k === target ? 1 : 0)
+
+// thumbs up:   6 steps of the line above on the answer it just gave (make those words MORE likely)
+// thumbs down: 6 steps with the sign flipped and the step clipped (make those words LESS likely)
+dz[k] = s · ( (k === target ? 1 : 0) − p[k] ),   s = min(p[target] / (1 − p[target]), 4)</pre>
+    </details>
+  </div>
+
+  <p class="sub" style="margin-top:18px">
+    Things to notice: in Classic mode your question never matters. In Learning mode the same question gets different answers because the Oracle rolls dice weighted by its probabilities.
+    One thumbs up can swing the Ask 10× tally from an even split to nineteen-to-one; one thumbs down swings it back. And the Oracle cannot say a word that is not in its vocabulary, no matter how it is trained.
+  </p>
+  <nav class="series bottom" aria-label="Neural network demo series"><a href="https://professor-jeff.github.io/happy-face-nn/" title="Previous demo in the series">← Previous: Happy Face</a><span>Part 4 of 4 · neural network demos</span><span></span></nav>
+</div>
+
+<button id="qrBtn" type="button" aria-expanded="false" aria-controls="qrPanel" title="Show a QR code so students can open this page on their phones.">Show QR code</button>
+<div id="qrPanel" role="dialog" aria-label="QR code for this page">
+  <div class="qrTitle">Scan to try it</div>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29" shape-rendering="crispEdges" role="img" aria-label="QR code for https://professor-jeff.github.io/learning-oracle/"><rect width="29" height="29" fill="#fff"/><path fill="#000" d="M0 0h7v1h-7zM9 0h1v1h-1zM14 0h1v1h-1zM16 0h4v1h-4zM22 0h7v1h-7zM0 1h1v1h-1zM6 1h1v1h-1zM8 1h2v1h-2zM11 1h3v1h-3zM15 1h3v1h-3zM22 1h1v1h-1zM28 1h1v1h-1zM0 2h1v1h-1zM2 2h3v1h-3zM6 2h1v1h-1zM9 2h3v1h-3zM15 2h1v1h-1zM18 2h3v1h-3zM22 2h1v1h-1zM24 2h3v1h-3zM28 2h1v1h-1zM0 3h1v1h-1zM2 3h3v1h-3zM6 3h1v1h-1zM8 3h2v1h-2zM11 3h5v1h-5zM17 3h1v1h-1zM22 3h1v1h-1zM24 3h3v1h-3zM28 3h1v1h-1zM0 4h1v1h-1zM2 4h3v1h-3zM6 4h1v1h-1zM10 4h1v1h-1zM12 4h2v1h-2zM16 4h1v1h-1zM18 4h3v1h-3zM22 4h1v1h-1zM24 4h3v1h-3zM28 4h1v1h-1zM0 5h1v1h-1zM6 5h1v1h-1zM8 5h1v1h-1zM10 5h1v1h-1zM13 5h5v1h-5zM22 5h1v1h-1zM28 5h1v1h-1zM0 6h7v1h-7zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM14 6h1v1h-1zM16 6h1v1h-1zM18 6h1v1h-1zM20 6h1v1h-1zM22 6h7v1h-7zM11 7h1v1h-1zM15 7h2v1h-2zM19 7h2v1h-2zM0 8h5v1h-5zM6 8h10v1h-10zM17 8h1v1h-1zM21 8h1v1h-1zM23 8h1v1h-1zM25 8h1v1h-1zM27 8h1v1h-1zM0 9h3v1h-3zM9 9h1v1h-1zM11 9h3v1h-3zM16 9h9v1h-9zM28 9h1v1h-1zM2 10h5v1h-5zM8 10h2v1h-2zM15 10h1v1h-1zM18 10h1v1h-1zM20 10h1v1h-1zM2 11h1v1h-1zM4 11h2v1h-2zM9 11h2v1h-2zM14 11h3v1h-3zM20 11h1v1h-1zM23 11h3v1h-3zM27 11h1v1h-1zM5 12h3v1h-3zM9 12h1v1h-1zM12 12h3v1h-3zM17 12h1v1h-1zM25 12h2v1h-2zM0 13h4v1h-4zM5 13h1v1h-1zM7 13h2v1h-2zM10 13h2v1h-2zM13 13h1v1h-1zM16 13h1v1h-1zM19 13h2v1h-2zM22 13h3v1h-3zM28 13h1v1h-1zM0 14h2v1h-2zM4 14h1v1h-1zM6 14h5v1h-5zM12 14h5v1h-5zM21 14h1v1h-1zM23 14h1v1h-1zM25 14h2v1h-2zM1 15h1v1h-1zM3 15h1v1h-1zM5 15h1v1h-1zM8 15h1v1h-1zM10 15h1v1h-1zM16 15h1v1h-1zM18 15h2v1h-2zM22 15h2v1h-2zM27 15h1v1h-1zM1 16h1v1h-1zM4 16h5v1h-5zM10 16h5v1h-5zM17 16h1v1h-1zM19 16h1v1h-1zM25 16h2v1h-2zM0 17h1v1h-1zM4 17h2v1h-2zM8 17h2v1h-2zM11 17h1v1h-1zM17 17h4v1h-4zM22 17h3v1h-3zM26 17h1v1h-1zM28 17h1v1h-1zM0 18h1v1h-1zM2 18h1v1h-1zM4 18h1v1h-1zM6 18h4v1h-4zM13 18h4v1h-4zM18 18h1v1h-1zM20 18h2v1h-2zM26 18h1v1h-1zM0 19h1v1h-1zM3 19h2v1h-2zM7 19h2v1h-2zM11 19h2v1h-2zM14 19h1v1h-1zM16 19h1v1h-1zM18 19h1v1h-1zM20 19h1v1h-1zM22 19h1v1h-1zM24 19h1v1h-1zM27 19h1v1h-1zM0 20h1v1h-1zM2 20h1v1h-1zM5 20h2v1h-2zM12 20h2v1h-2zM17 20h1v1h-1zM19 20h6v1h-6zM26 20h3v1h-3zM8 21h1v1h-1zM11 21h1v1h-1zM13 21h1v1h-1zM16 21h1v1h-1zM20 21h1v1h-1zM24 21h5v1h-5zM0 22h7v1h-7zM8 22h1v1h-1zM14 22h3v1h-3zM19 22h2v1h-2zM22 22h1v1h-1zM24 22h3v1h-3zM0 23h1v1h-1zM6 23h1v1h-1zM9 23h1v1h-1zM12 23h1v1h-1zM14 23h2v1h-2zM20 23h1v1h-1zM24 23h1v1h-1zM0 24h1v1h-1zM2 24h3v1h-3zM6 24h1v1h-1zM8 24h1v1h-1zM10 24h1v1h-1zM12 24h3v1h-3zM17 24h1v1h-1zM20 24h5v1h-5zM26 24h2v1h-2zM0 25h1v1h-1zM2 25h3v1h-3zM6 25h1v1h-1zM8 25h1v1h-1zM10 25h2v1h-2zM13 25h1v1h-1zM16 25h1v1h-1zM18 25h1v1h-1zM20 25h1v1h-1zM23 25h1v1h-1zM25 25h2v1h-2zM28 25h1v1h-1zM0 26h1v1h-1zM2 26h3v1h-3zM6 26h1v1h-1zM8 26h1v1h-1zM12 26h4v1h-4zM17 26h2v1h-2zM21 26h7v1h-7zM0 27h1v1h-1zM6 27h1v1h-1zM8 27h2v1h-2zM11 27h2v1h-2zM14 27h1v1h-1zM16 27h1v1h-1zM18 27h3v1h-3zM22 27h1v1h-1zM24 27h2v1h-2zM27 27h1v1h-1zM0 28h7v1h-7zM8 28h1v1h-1zM13 28h2v1h-2zM17 28h3v1h-3zM22 28h1v1h-1zM24 28h3v1h-3z"/></svg>
+  <div class="qrUrl">professor-jeff.github.io/learning-oracle</div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// PART 1: the model. A tiny next-word predictor, written from scratch (class Oracle).
+// Input: which vocab words are in the question + the last two words it said. Output: a
+// probability for every vocab word and for END. Same math family as the other three demos.
+// ---------------------------------------------------------------------------
+function mulberry32(seed){ return function(){ seed|=0; seed=seed+0x6D2B79F5|0; let t=Math.imul(seed^seed>>>15,1|seed); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+const DEFAULT_VOCAB=["the","your","my","i","again","is","will","be","ask","wait","trust","find","yes","no","maybe","bright","dark","unclear","soon","path","future","sign","answer","luck","love"];
+const DEFAULT_CORPUS=`will my luck be bright => yes your luck will be bright
+will my luck be bright => maybe ask again soon
+is my path dark => no your path is bright
+is my path dark => the sign is unclear ask again
+will i find love => yes love will find your path soon
+will i find love => maybe the sign is unclear
+is the future bright => yes the future is bright trust the sign
+is the future bright => the future is unclear wait
+will the answer be yes => yes the answer is yes
+will the answer be yes => no the answer is no
+is my sign unclear => your sign is unclear ask again soon
+will i find my path => yes trust your path
+will i find my path soon => soon your path will be bright
+is my luck dark => no your luck is bright
+will my future be dark => no your future will be bright
+is love my future => maybe love is your path
+will i be bright => yes your future is bright
+is my answer soon => wait your answer is soon
+will i find luck => yes luck will find your path
+is the sign bright => the sign is bright trust the future
+is my love bright => yes your love is bright
+will the future be unclear => maybe wait ask again
+is the path bright => yes the path is bright
+will my sign be dark => no your sign is bright
+will i find the answer => yes the answer will find your path soon
+is my luck unclear => your luck is unclear wait
+will i find love soon => soon love will find your path
+is the answer no => maybe ask again
+will my path be bright => yes your path will be bright soon
+is my future unclear => the future is unclear trust your path
+will i trust the sign => yes trust the sign
+is luck my path => maybe luck is your future
+will my love be dark => no your love is bright
+will my answer be unclear => maybe the answer is unclear ask again
+is my sign dark => no your sign will be bright soon
+will luck find my path => yes luck will find your path`;
+const CLASSIC=["It is certain","It is decidedly so","Without a doubt","Yes definitely","You may rely on it","As I see it, yes","Most likely","Outlook good","Yes","Signs point to yes","Reply hazy, try again","Ask again later","Better not tell you now","Cannot predict now","Concentrate and ask again","Don't count on it","My reply is no","My sources say no","Outlook not so good","Very doubtful"];
+
+function tokenize(s){ return s.toLowerCase().replace(/[^a-z' ]+/g," ").split(/\s+/).filter(Boolean); }
+function parseCorpus(text,vocab){ const set=new Set(vocab),pairs=[],bad=[];
+  text.split(/\n/).forEach(line=>{ line=line.trim(); if(!line)return; const m=line.split("=>"); if(m.length!==2){bad.push({line,why:"needs one =>"});return;}
+    const q=tokenize(m[0]),a=tokenize(m[1]); const oov=[...q,...a].filter(w=>!set.has(w));
+    if(oov.length){bad.push({line,why:"not in vocab: "+[...new Set(oov)].join(", ")});return;}
+    if(!a.length){bad.push({line,why:"empty answer"});return;} pairs.push({q,a}); });
+  return {pairs,bad}; }
+
+class Oracle{
+  constructor(vocab,opts={}){ this.vocab=vocab;this.V=vocab.length;this.idx=new Map(vocab.map((w,i)=>[w,i]));this.NH=opts.hidden||24;this.NIN=this.V+2*(this.V+1);this.NOUT=this.V+1;this.START=this.V;this.END=this.V;this.seed=opts.seed||1337;this.reset(); }
+  reset(){ const rng=mulberry32(this.seed);this.rng=mulberry32(this.seed*7+1);const{NIN,NH,NOUT}=this;
+    this.W1=new Float32Array(NIN*NH);this.b1=new Float32Array(NH);this.W2=new Float32Array(NH*NOUT);this.b2=new Float32Array(NOUT);
+    const s1=1/Math.sqrt(NIN),s2=1/Math.sqrt(NH);for(let i=0;i<this.W1.length;i++)this.W1[i]=(rng()*2-1)*s1*1.5;for(let i=0;i<this.W2.length;i++)this.W2[i]=(rng()*2-1)*s2*1.5;
+    this.epochsTrained=0;this.lossHistory=[];this.feedbackCount=0; }
+  paramCount(){return this.W1.length+this.b1.length+this.W2.length+this.b2.length;}
+  encode(q,p1,p2){const x=new Float32Array(this.NIN);for(const id of q)x[id]=1;x[this.V+p1]=1;x[this.V+(this.V+1)+p2]=1;return x;}
+  qIds(words){const s=new Set();for(const w of words){const i=this.idx.get(w);if(i!==undefined)s.add(i);}return[...s];}
+  forward(x){const{NIN,NH,NOUT,W1,b1,W2,b2}=this;const h=new Float32Array(NH);
+    for(let j=0;j<NH;j++){let s=b1[j];for(let i=0;i<NIN;i++){if(x[i])s+=x[i]*W1[i*NH+j];}h[j]=Math.tanh(s);}
+    const z=new Float32Array(NOUT);let mx=-1e30;for(let k=0;k<NOUT;k++){let s=b2[k];for(let j=0;j<NH;j++)s+=h[j]*W2[j*NOUT+k];z[k]=s;if(s>mx)mx=s;}
+    const p=new Float32Array(NOUT);let sum=0;for(let k=0;k<NOUT;k++){p[k]=Math.exp(z[k]-mx);sum+=p[k];}for(let k=0;k<NOUT;k++)p[k]/=sum;return{h,p};}
+  backward(x,h,gz,lr){const{NIN,NH,NOUT,W1,b1,W2,b2}=this;const gh=new Float32Array(NH);
+    for(let j=0;j<NH;j++){let s=0;const hj=h[j];for(let k=0;k<NOUT;k++){const g=gz[k];s+=g*W2[j*NOUT+k];W2[j*NOUT+k]-=lr*g*hj;}gh[j]=s*(1-hj*hj);}
+    for(let k=0;k<NOUT;k++)b2[k]-=lr*gz[k];
+    for(let i=0;i<NIN;i++){if(!x[i])continue;const xi=x[i];for(let j=0;j<NH;j++)W1[i*NH+j]-=lr*gh[j]*xi;}
+    for(let j=0;j<NH;j++)b1[j]-=lr*gh[j];}
+  examples(pair){const q=this.qIds(pair.q);const a=pair.a.map(w=>this.idx.get(w)).filter(i=>i!==undefined);const out=[];let p1=this.START,p2=this.START;
+    for(let t=0;t<=a.length;t++){const target=t<a.length?a[t]:this.END;out.push({x:this.encode(q,p1,p2),target});p2=p1;p1=target;}return out;}
+  step(exs,lr,positive=true){let loss=0;for(const ex of exs){const{h,p}=this.forward(ex.x);const t=ex.target;const gz=new Float32Array(this.NOUT);
+      if(positive){loss+=-Math.log(p[t]+1e-9);for(let k=0;k<this.NOUT;k++)gz[k]=p[k];gz[t]-=1;}
+      else{const pt=p[t];loss+=-Math.log(1-pt+1e-9);const s=Math.min(pt/(1-pt+1e-6),4);for(let k=0;k<this.NOUT;k++)gz[k]=s*(-p[k]);gz[t]+=s;}
+      this.backward(ex.x,h,gz,lr);}return loss/Math.max(1,exs.length);}
+  epoch(pairs,lr=0.08){const exs=[];for(const pr of pairs)exs.push(...this.examples(pr));for(let i=exs.length-1;i>0;i--){const j=Math.floor(this.rng()*(i+1));[exs[i],exs[j]]=[exs[j],exs[i]];}
+    const loss=this.step(exs,lr,true);this.epochsTrained++;this.lossHistory.push(loss);return loss;}
+  generate(qWords,temperature=0.8,maxLen=8){const q=this.qIds(qWords);let p1=this.START,p2=this.START;const words=[],steps=[];
+    for(let t=0;t<maxLen;t++){const{p}=this.forward(this.encode(q,p1,p2));const lg=Array.from(p,(v,k)=>({k,lp:Math.log(v+1e-9)/temperature}));
+      if(t<2)lg[this.END].lp=-1e9;const mx=Math.max(...lg.map(o=>o.lp));let sum=0;for(const o of lg){o.p=Math.exp(o.lp-mx);sum+=o.p;}for(const o of lg)o.p/=sum;
+      let r=this.rng(),chosen=lg[lg.length-1].k;for(const o of lg){r-=o.p;if(r<=0){chosen=o.k;break;}}
+      const top=[...lg].sort((a,b)=>b.p-a.p).slice(0,5).map(o=>({word:o.k===this.END?"[end]":this.vocab[o.k],p:o.p}));
+      steps.push({chosen:chosen===this.END?"[end]":this.vocab[chosen],top});if(chosen===this.END)break;words.push(this.vocab[chosen]);p2=p1;p1=chosen;}
+    return{words,steps};}
+  feedback(qWords,aWords,positive,strength=6,lr=0.08){const b1=Float32Array.from(this.W1),b2=Float32Array.from(this.W2);const exs=this.examples({q:qWords,a:aWords});
+    for(let i=0;i<strength;i++)this.step(exs,lr,positive);let d=0;for(let i=0;i<b1.length;i++)d+=Math.abs(b1[i]-this.W1[i]);for(let i=0;i<b2.length;i++)d+=Math.abs(b2[i]-this.W2[i]);this.feedbackCount++;return d;}
+}
+
+// ---------------------------------------------------------------------------
+// PART 2: the page
+// ---------------------------------------------------------------------------
+const $ = id => document.getElementById(id);
+const cssVar = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const EPOCHS = 200;
+let vocab = [...DEFAULT_VOCAB], corpusText = DEFAULT_CORPUS;
+let starterPairs = parseCorpus(corpusText, vocab).pairs;
+let oracle = new Oracle(vocab);
+let mode = "classic", lastQ = null, lastA = null, training = false;
+let pool = [];                                   // {q: [], a: [], mark: null | "yes" | "no", starter: bool}
+const poolRng = mulberry32(Date.now() & 0xffff);
+const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// --- old tab links (#oracle, #curate, #vocab, #how) now scroll to the matching card ---
+const SECTIONS = ["oracle", "curate", "vocab", "how"];
+if (SECTIONS.includes((location.hash || "").slice(1))) setTimeout(() => $(location.hash.slice(1)).scrollIntoView(), 0);
+
+// --- mode ---
+const MODE_NOTE = { classic: "twenty stock answers, Math.random(), no model", learn: "a real network: 75 inputs → 24 hidden → 26 outputs" };
+function setMode(m) {
+  mode = m;
+  Array.from($("modeSeg").children).forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === m)));
+  $("modeNote").textContent = MODE_NOTE[m];
+  $("brain").hidden = m !== "learn"; $("fb").hidden = m !== "learn"; $("ask10").hidden = m !== "learn"; $("classicNote").hidden = m !== "classic"; $("chips").hidden = m !== "learn";
+  $("qnote").textContent = ""; $("ans").innerHTML = "Ask me<br>anything"; lastQ = lastA = null;
+  $("fbmsg").textContent = "Rate the answer and the Oracle adjusts its weights."; $("fbmsg").className = "fbmsg";
+}
+$("modeSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (b) setMode(b.dataset.mode); });
+
+// --- ask ---
+function shake(text) {
+  const ball = $("ball");
+  ball.classList.remove("shaking"); void ball.offsetWidth; ball.classList.add("shaking");
+  setTimeout(() => { $("ans").textContent = text; $("ansLive").textContent = "The Oracle says: " + text; ball.classList.remove("shaking"); }, 520);
+}
+function questionWords() {
+  const raw = tokenize($("qin").value), known = raw.filter(w => oracle.idx.has(w)), unknown = [...new Set(raw.filter(w => !oracle.idx.has(w)))];
+  $("qnote").innerHTML = raw.length === 0 ? "No question? The Oracle answers the silence." : unknown.length ? "Words outside the Oracle's world are ignored: <b class=\"oov\">" + esc(unknown.join(", ")) + "</b>" : "";
+  return known;
+}
+$("askForm").addEventListener("submit", e => {
+  e.preventDefault();
+  if (mode === "classic") { shake(CLASSIC[Math.floor(Math.random() * CLASSIC.length)]); return; }
+  if (training) return;
+  const q = questionWords(), g = oracle.generate(q);
+  lastQ = q; lastA = g.words;
+  shake(g.words.join(" ")); renderSteps(g.steps);
+  $("thumbUp").disabled = $("thumbDown").disabled = false;
+  $("fbmsg").textContent = "Rate this answer."; $("fbmsg").className = "fbmsg";
+});
+$("ask10").addEventListener("click", () => {
+  if (training) return;
+  const q = questionWords(), tally = {};
+  for (let i = 0; i < 10; i++) { const s = oracle.generate(q).words.join(" "); tally[s] = (tally[s] || 0) + 1; }
+  const rows = Object.entries(tally).sort((a, b) => b[1] - a[1]);
+  $("tally").innerHTML = rows.map(([s, n]) => '<div class="row"><div><div>' + esc(s) + '</div><div class="bar"><i style="width:' + (n * 10) + '%"></i></div></div><span>' + n + '/10</span></div>').join("");
+});
+function renderSteps(steps) {
+  $("steps").innerHTML = steps.map((st, i) => '<div class="step"><div class="n">' + (i + 1) + '</div><div class="cands">' +
+    st.top.map(c => '<div class="cand ' + (c.word === st.chosen ? "chosen" : "") + '"><span class="w">' + esc(c.word) + '</span><div class="bar"><i style="width:' + Math.round(c.p * 100) + '%"></i></div><span class="p">' + (c.p * 100).toFixed(0) + '%</span></div>').join("") +
+    '</div></div>').join("");
+}
+function renderChips() {
+  const qs = [...new Set(starterPairs.map(p => p.q.join(" ")))], pick = [], r = mulberry32(42), copy = [...qs];
+  while (pick.length < 6 && copy.length) pick.push(copy.splice(Math.floor(r() * copy.length), 1)[0]);
+  $("chips").innerHTML = pick.map(q => '<button type="button" class="chip">' + esc(q) + '?</button>').join("");
+  $("chips").querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => { $("qin").value = c.textContent; $("askBtn").click(); }));
+}
+
+// --- feedback ---
+function giveFeedback(positive) {
+  if (!lastA || training) return;
+  const d = oracle.feedback(lastQ, lastA, positive);
+  $("fbmsg").textContent = (positive ? "👍 made those words more likely" : "👎 made those words less likely") + " · weights moved by " + d.toFixed(2);
+  $("fbmsg").className = "fbmsg " + (positive ? "good" : "bad");
+  $("thumbUp").disabled = $("thumbDown").disabled = true;
+  updateStats();
+}
+$("thumbUp").addEventListener("click", () => giveFeedback(true));
+$("thumbDown").addEventListener("click", () => giveFeedback(false));
+
+// --- training ---
+function updateStats() {
+  $("sVocab").textContent = oracle.V; $("sParams").textContent = oracle.paramCount().toLocaleString();
+  $("sEpochs").textContent = oracle.epochsTrained; $("sFb").textContent = oracle.feedbackCount;
+  drawCurve();
+}
+function drawCurve() {
+  const c = $("curve"), ctx = c.getContext("2d"), W = c.width, H = c.height, L = 54, R = 16, T = 14, B = 40;
+  ctx.clearRect(0, 0, W, H);
+  ctx.font = "17px system-ui, sans-serif"; ctx.lineWidth = 1;
+  const muted = cssVar("--muted"), line = cssVar("--line"), hist = oracle.lossHistory;
+  const top = Math.max(1, Math.ceil((hist.length ? Math.max(...hist) : 1) * 2) / 2);
+  for (let k = 0; k <= 4; k++) {
+    const py = T + (H - T - B) * (1 - k / 4);
+    ctx.strokeStyle = line; ctx.beginPath(); ctx.moveTo(L, py); ctx.lineTo(W - R, py); ctx.stroke();
+    ctx.fillStyle = muted; ctx.textAlign = "right"; ctx.fillText((top * k / 4).toFixed(1), L - 8, py + 6);
+  }
+  ctx.fillStyle = muted; ctx.textAlign = "center"; ctx.fillText("training loss per epoch (" + hist.length + " of " + EPOCHS + ")", (L + W - R) / 2, H - 10);
+  if (hist.length < 2) return;
+  ctx.strokeStyle = cssVar("--accent"); ctx.lineWidth = 3; ctx.beginPath();
+  hist.forEach((v, i) => { const px = L + (W - L - R) * i / (EPOCHS - 1), py = T + (H - T - B) * (1 - Math.min(1, v / top)); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
+  ctx.stroke();
+}
+function train(pairs, done) {
+  const s = $("trainNote");
+  if (!pairs.length) { s.className = "status untrained"; s.textContent = "Nothing approved — the Oracle has no training data."; return; }
+  training = true; oracle.reset(); let e = 0;
+  $("askBtn").disabled = $("ask10").disabled = $("retrain").disabled = $("applyVocab").disabled = true;
+  s.className = "status"; s.textContent = "Training…";
+  (function chunk() {
+    const t0 = performance.now();
+    while (e < EPOCHS && performance.now() - t0 < 30) { oracle.epoch(pairs); e++; }
+    $("prog").value = e;
+    s.textContent = "Training… epoch " + e + " of " + EPOCHS + " on " + pairs.length + " pairs · loss " + oracle.lossHistory[oracle.lossHistory.length - 1].toFixed(3);
+    updateStats();
+    if (e < EPOCHS) setTimeout(chunk, 0);
+    else {
+      training = false;
+      $("askBtn").disabled = $("ask10").disabled = $("applyVocab").disabled = false; $("retrain").disabled = pool.filter(p => p.mark === "yes").length === 0;
+      s.className = "status done"; s.textContent = "Trained — " + EPOCHS + " epochs on " + pairs.length + " pairs, final loss " + oracle.lossHistory[oracle.lossHistory.length - 1].toFixed(3);
+      if (done) done();
+    }
+  })();
+}
+
+// --- curation ---
+function randomPair() {
+  const V = vocab, w = () => V[Math.floor(poolRng() * V.length)];
+  const qT = [() => ["will", "my", w(), "be", w()], () => ["is", "the", w(), w()], () => ["will", "i", "find", w()], () => ["is", "my", w(), w()]];
+  const q = qT[Math.floor(poolRng() * qT.length)]().filter(x => vocab.includes(x)), n = 3 + Math.floor(poolRng() * 4), a = [];
+  for (let i = 0; i < n; i++) a.push(w());
+  return { q, a, mark: null, starter: false };
+}
+function buildPool() {
+  pool = starterPairs.map(p => ({ q: p.q, a: p.a, mark: null, starter: true }));
+  for (let i = 0; i < Math.max(12, Math.round(starterPairs.length * .6)); i++) pool.push(randomPair());
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(poolRng() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  renderPool();
+}
+function renderPool() {
+  $("pool").innerHTML = pool.map((p, i) => '<div class="pair ' + (p.mark || "") + '" data-i="' + i + '"><div><div class="q">' + esc(p.q.join(" ")) + '?</div><div class="a">' + esc(p.a.join(" ")) + '</div></div>' +
+    '<div class="acts"><button type="button" class="y" aria-label="Approve this pair" aria-pressed="' + (p.mark === "yes") + '">✓</button><button type="button" class="n" aria-label="Reject this pair" aria-pressed="' + (p.mark === "no") + '">✗</button></div></div>').join("");
+  $("pool").querySelectorAll(".pair").forEach(el => {
+    const i = +el.dataset.i;
+    el.querySelector(".y").addEventListener("click", () => { pool[i].mark = pool[i].mark === "yes" ? null : "yes"; renderPool(); });
+    el.querySelector(".n").addEventListener("click", () => { pool[i].mark = pool[i].mark === "no" ? null : "no"; renderPool(); });
+  });
+  const yes = pool.filter(p => p.mark === "yes").length;
+  $("poolCount").textContent = yes + " approved · " + pool.filter(p => p.mark === "no").length + " rejected · " + pool.length + " total";
+  $("retrain").disabled = yes === 0 || training;
+}
+$("retrain").addEventListener("click", () => {
+  const approved = pool.filter(p => p.mark === "yes").map(p => ({ q: p.q, a: p.a }));
+  setMode("learn"); $("oracle").scrollIntoView({ behavior: "smooth" }); train(approved);
+});
+$("moreRandom").addEventListener("click", () => { for (let i = 0; i < 12; i++) pool.push(randomPair()); renderPool(); });
+$("approveStarter").addEventListener("click", () => { pool.forEach(p => { if (p.starter) p.mark = "yes"; }); renderPool(); });
+$("clearMarks").addEventListener("click", () => { pool.forEach(p => p.mark = null); renderPool(); });
+
+// --- vocabulary & corpus ---
+function fillVocabTab() { $("vocabIn").value = vocab.join(" "); $("corpusIn").value = corpusText; validateCorpus(); }
+function readVocab() { const v = [...new Set(tokenize($("vocabIn").value))]; $("vcount").textContent = v.length; return v; }
+function validateCorpus() {
+  const v = readVocab(), { pairs, bad } = parseCorpus($("corpusIn").value, v);
+  $("corpusErr").textContent = bad.map(b => "✗ " + b.line + "   ← " + b.why).join("\n");
+  $("corpusOk").textContent = pairs.length + " usable pairs · " + v.length + " words";
+  return { v, pairs };
+}
+$("vocabIn").addEventListener("input", validateCorpus); $("corpusIn").addEventListener("input", validateCorpus);
+$("applyVocab").addEventListener("click", () => {
+  const { v, pairs } = validateCorpus();
+  if (v.length < 4 || !pairs.length) { $("corpusErr").textContent += "\nNeed at least 4 words and 1 usable pair."; return; }
+  vocab = v; corpusText = $("corpusIn").value; starterPairs = pairs; oracle = new Oracle(vocab);
+  buildPool(); renderChips(); fillArch(); setMode("learn"); $("oracle").scrollIntoView({ behavior: "smooth" }); train(starterPairs);
+});
+$("restoreDefaults").addEventListener("click", () => {
+  vocab = [...DEFAULT_VOCAB]; corpusText = DEFAULT_CORPUS; starterPairs = parseCorpus(corpusText, vocab).pairs; oracle = new Oracle(vocab);
+  fillVocabTab(); buildPool(); renderChips(); fillArch(); train(starterPairs);
+});
+
+function fillArch() {
+  const o = oracle;
+  $("arch").textContent =
+"INPUT   " + o.NIN + " numbers  =  " + o.V + " (which words are in the question)\n" +
+"                      + " + (o.V + 1) + " (the last word said, or START)\n" +
+"                      + " + (o.V + 1) + " (the word before that, or START)\n" +
+"        │\n" +
+"HIDDEN  " + o.NH + " tanh neurons      " + o.NIN + "×" + o.NH + " weights + " + o.NH + " biases\n" +
+"        │\n" +
+"OUTPUT  " + o.NOUT + " probabilities   " + o.NH + "×" + o.NOUT + " weights + " + o.NOUT + " biases   (" + o.V + " words + [end])\n\n" +
+"TOTAL   " + o.paramCount().toLocaleString() + " adjustable numbers. That is the whole Oracle.";
+}
+
+// --- boot: train the starter Oracle immediately so Learning mode is ready when they switch ---
+fillVocabTab(); buildPool(); renderChips(); fillArch(); setMode("classic"); updateStats();
+train(starterPairs);
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", drawCurve);
+
+// QR code toggle so students can find this page during a presentation
+const qrBtn = $("qrBtn"), qrPanel = $("qrPanel");
+function setQr(open) {
+  qrPanel.classList.toggle("open", open);
+  qrBtn.textContent = open ? "Hide QR code" : "Show QR code";
+  qrBtn.setAttribute("aria-expanded", String(open));
+}
+qrBtn.addEventListener("click", () => setQr(!qrPanel.classList.contains("open")));
+document.addEventListener("keydown", e => { if (e.key === "Escape") setQr(false); });
+</script>
+</body>
+</html>
