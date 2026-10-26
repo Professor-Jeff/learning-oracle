@@ -65,12 +65,12 @@
   .ball { width: min(260px, 70vw); aspect-ratio: 1; border-radius: 50%; position: relative;
     background: radial-gradient(circle at 32% 28%, #4a4458 0%, #1a1722 32%, #07060a 75%);
     box-shadow: 0 20px 40px rgba(0,0,0,.35), inset 0 -20px 40px rgba(0,0,0,.6), 0 0 0 1px #000; }
-  .ball .win { position: absolute; left: 50%; top: 50%; width: 62%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%;
+  .ball .win { position: absolute; left: 50%; top: 50%; width: 64%; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; padding: 12%;
     background: radial-gradient(circle at 50% 40%, #2a3fb8, #0e1a5e 60%, #060c33); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 30px #000; }
-  .ball .tri { width: 76%; aspect-ratio: 1; clip-path: polygon(50% 8%, 96% 88%, 4% 88%); background: linear-gradient(180deg, #2d44c7, #101c6e); display: flex; align-items: center; justify-content: center; padding: 28% 14% 6%; }
-  .ball .ans { font-size: clamp(10px, 2.4vw, 13px); font-weight: 700; line-height: 1.25; text-align: center; color: #eef2ff; text-transform: uppercase; letter-spacing: .04em; transition: opacity .25s; max-width: 100%; overflow-wrap: anywhere; }
+  /* the answer fades up through the liquid, filling the whole window (no die, so nothing gets clipped) */
+  .ball .ans { font-size: clamp(11px, 2.6vw, 15px); font-weight: 700; line-height: 1.3; text-align: center; color: #eef2ff; text-transform: uppercase; letter-spacing: .04em; max-width: 100%; overflow-wrap: anywhere; text-shadow: 0 0 10px rgba(120,150,255,.6); opacity: 1; filter: blur(0); transition: opacity 1.4s ease-in, filter 1.4s ease-in; }
   .ball.shaking { animation: shake .7s ease-in-out; }
-  .ball.shaking .ans { opacity: 0; }
+  .ball.shaking .ans { opacity: 0; filter: blur(6px); transition: opacity .15s, filter .15s; }
   @keyframes shake { 0%, 100% { transform: rotate(0); } 15% { transform: rotate(-9deg) translateX(-6px); } 30% { transform: rotate(8deg) translateX(6px); } 45% { transform: rotate(-6deg); } 60% { transform: rotate(5deg); } 80% { transform: rotate(-2deg); } }
   @media (prefers-reduced-motion: reduce) { .ball.shaking { animation: none; } }
   .askrow { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -118,6 +118,17 @@
   .err { font-family: ui-monospace, Menlo, monospace; font-size: .8rem; color: var(--bad); white-space: pre-wrap; margin-top: 6px; }
   .ok { font-size: .85rem; color: var(--ok); margin-top: 6px; font-weight: 600; }
   .prose p { margin: 0 0 12px; line-height: 1.5; }
+  /* vocabulary pop-up */
+  dialog { border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; box-shadow: 0 12px 32px rgba(0,0,0,.25); color: var(--ink); background: var(--card); max-width: 640px; width: calc(100vw - 32px); }
+  dialog::backdrop { background: rgba(0,0,0,.4); }
+  dialog h3 { margin: 0 0 8px; font-size: 1.05rem; }
+  dialog .btns { text-align: right; margin-top: 14px; }
+  dialog .btns button { margin: 0 0 0 8px; }
+  .words { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .word { padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px; font-family: ui-monospace, Menlo, monospace; font-size: .95rem; background: var(--bg); }
+  .word.inq { background: var(--okbg); border-color: var(--ok); font-weight: 700; }
+  .wordsKey { font-size: .8rem; color: var(--muted); margin-top: 10px; }
+  .wordsKey b { display: inline-block; width: 14px; height: 14px; border-radius: 999px; vertical-align: -2px; margin-right: 4px; border: 1px solid var(--ok); background: var(--okbg); }
   /* QR code for presentations (lower left) */
   #qrBtn { position: fixed; left: 16px; bottom: 16px; z-index: 20; margin: 0; font-size: .85rem; padding: 8px 14px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
   #qrPanel { position: fixed; left: 16px; bottom: 64px; z-index: 20; display: none; flex-direction: column; align-items: center; gap: 8px; padding: 16px 20px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
@@ -147,10 +158,11 @@
         <button type="button" data-mode="learn" aria-pressed="false" title="A real neural network, trained in your browser when the page loaded. It can be taught.">Learning Oracle</button>
       </div>
       <span class="note" id="modeNote" style="margin:0"></span>
+      <button type="button" id="wordsBtn" style="margin-left:auto" title="Open the Oracle's whole vocabulary: every word it can hear in a question and every word it can say.">Show the words</button>
     </div>
     <div class="two">
       <div>
-        <div class="ballwrap"><div class="ball" id="ball" aria-hidden="true"><div class="win"><div class="tri"><div class="ans" id="ans">Ask me<br>anything</div></div></div></div></div>
+        <div class="ballwrap"><div class="ball" id="ball" aria-hidden="true"><div class="win"><div class="ans" id="ans">Ask me<br>anything</div></div></div></div>
         <div class="sr" id="ansLive" role="status" aria-live="polite"></div>
         <form class="askrow" id="askForm">
           <label class="sr" for="qin">Your question</label>
@@ -252,6 +264,14 @@ dz[k] = s · ( (k === target ? 1 : 0) − p[k] ),   s = min(p[target] / (1 − p
   </p>
   <nav class="series bottom" aria-label="Neural network demo series"><a href="https://professor-jeff.github.io/happy-face-nn/" title="Previous demo in the series">← Previous: Happy Face</a><span>Part 4 of 4 · neural network demos</span><span></span></nav>
 </div>
+
+<dialog id="wordsDialog" aria-labelledby="wordsTitle">
+  <h3 id="wordsTitle">The Oracle's whole vocabulary</h3>
+  <p class="note" id="wordsNote" style="margin:0"></p>
+  <div class="words" id="wordsList"></div>
+  <div class="wordsKey"><b></b>in your current question</div>
+  <div class="btns"><button type="button" id="wordsEdit" title="Jump to step 3, where the list and the corpus can be changed.">Edit the list (step 3)</button><button type="button" id="wordsClose" class="primary">Close</button></div>
+</dialog>
 
 <button id="qrBtn" type="button" aria-expanded="false" aria-controls="qrPanel" title="Show a QR code so students can open this page on their phones.">Show QR code</button>
 <div id="qrPanel" role="dialog" aria-label="QR code for this page">
@@ -545,6 +565,16 @@ function fillArch() {
 "OUTPUT  " + o.NOUT + " probabilities   " + o.NH + "×" + o.NOUT + " weights + " + o.NOUT + " biases   (" + o.V + " words + [end])\n\n" +
 "TOTAL   " + o.paramCount().toLocaleString() + " adjustable numbers. That is the whole Oracle.";
 }
+
+// --- the vocabulary pop-up: everything the Oracle can hear and say ---
+function renderWords() {
+  const inQ = new Set(tokenize($("qin").value));
+  $("wordsList").innerHTML = vocab.map(w => '<span class="word' + (inQ.has(w) ? " inq" : "") + '">' + esc(w) + '</span>').join("");
+  $("wordsNote").textContent = vocab.length + " words. This is the Oracle's entire world: the only words it can hear in a question, and the only words it can say in an answer. Anything else you type is ignored, and it can never say a word that is not here.";
+}
+$("wordsBtn").addEventListener("click", () => { renderWords(); $("wordsDialog").showModal(); });
+$("wordsClose").addEventListener("click", () => $("wordsDialog").close());
+$("wordsEdit").addEventListener("click", () => { $("wordsDialog").close(); $("vocab").scrollIntoView({ behavior: "smooth" }); $("vocabIn").focus({ preventScroll: true }); });
 
 // --- boot: train the starter Oracle immediately so Learning mode is ready when they switch ---
 fillVocabTab(); buildPool(); renderChips(); fillArch(); setMode("classic"); updateStats();
