@@ -60,6 +60,7 @@
   .series a { color: var(--accent); text-decoration: none; font-weight: 600; white-space: nowrap; }
   .series a:hover, .series a:focus-visible { text-decoration: underline; }
   .series.bottom { margin: 28px 0 0; padding-top: 14px; border-top: 1px solid var(--line); }
+  @media (max-width: 600px) { .series { flex-wrap: wrap; } .series > span { order: 3; width: 100%; text-align: center; } }
   /* the ball: the one dark object on the page, same in both color schemes */
   .ballwrap { display: flex; justify-content: center; margin: 10px 0 16px; }
   .ball { width: min(260px, 70vw); aspect-ratio: 1; border-radius: 50%; position: relative;
